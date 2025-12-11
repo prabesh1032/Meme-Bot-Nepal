@@ -1,12 +1,206 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from './Button';
-import { Download, Upload, Image as ImageIcon, Trash2, Type, MoveVertical, Palette } from 'lucide-react';
+import { Download, Upload, Image as ImageIcon, Trash2, Type, MoveVertical, Palette, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { generateMemeImage } from '../services/geminiService';
 
 interface MemeEditorProps {
   initialTopText?: string;
   initialBottomText?: string;
   initialImage?: string | null;
 }
+
+// Pre-defined Nepali Templates with AI Prompts and Multiple Joke Variations
+const NEPALI_TEMPLATES = [
+  // --- POLITICAL ---
+  {
+    id: 'balen',
+    label: 'Balen Dozer',
+    icon: '🕶️',
+    texts: [
+      { top: 'MAP PASS CHAINA?', bottom: 'DOZER LYAU TA?' },
+      { top: 'KATHMANDU MA', bottom: 'METRO CHALCHA' },
+      { top: 'SABAI JANA', bottom: 'KAAM MA LAGNUS' },
+      { top: 'TINKUNE KO', bottom: 'SAMASYA SAMADHAN' }
+    ],
+    prompt: 'Kathmandu Mayor Balen Shah caricature wearing black sunglasses, standing confidently with crossed arms, yellow bulldozer in background, digital art style',
+  },
+  {
+    id: 'oli',
+    label: 'Oli Ukhan',
+    icon: '🎤',
+    texts: [
+      { top: 'TIMI TA HAINA', bottom: 'TIMRO BAJE LE SAKDAINA' },
+      { top: 'GAS KO PIPE', bottom: 'GHAR GHAR MA PURYAUCHU' },
+      { top: 'HAWA BATA BIJULI', bottom: 'NIKALCHU MA' },
+      { top: 'AMBAK KHANUS', bottom: 'CORONA BHAGAUNUS' }
+    ],
+    prompt: 'KP Sharma Oli caricature wearing dhaka topi, pointing finger and laughing, funny expression, nepali political meme style',
+  },
+  {
+    id: 'prachanda',
+    label: 'Kursi Game',
+    icon: '🪑',
+    texts: [
+      { top: 'PRADHANMANTRI KO PALO', bottom: 'FERI MERO AAYO' },
+      { top: 'KURSI CHODNA', bottom: 'MANN LAGDAINA' },
+      { top: 'JUNGLE BATA', bottom: 'MAHAL MA AAYE' }
+    ],
+    prompt: 'Pushpa Kamal Dahal Prachanda caricature, sitting on a large golden chair, looking cunning and happy, political cartoon style',
+  },
+  {
+    id: 'rabi',
+    label: 'Rabi Ghanti',
+    icon: '🔔',
+    texts: [
+      { top: 'FILE KHULDAI CHA', bottom: 'READY BASNUS HAI' },
+      { top: 'GHANTI BAJYO', bottom: 'BHRASTACHARI BHAGYO' },
+      { top: 'MANTRI PAD', bottom: 'FERI CHAINCHA MALAI' }
+    ],
+    prompt: 'Rabi Lamichhane caricature looking intense and pointing finger, breaking news background with blue theme, digital art',
+  },
+  
+  // --- DAILY LIFE & TRENDS ---
+  {
+    id: 'loadshedding',
+    label: 'Loadshedding',
+    icon: '🕯️',
+    texts: [
+        { top: 'BATTI GAYO', bottom: 'INVERTER CHAINCHA' },
+        { top: 'ONLINE CLASS THIYO', bottom: 'BATTI GAYO SIR' },
+        { top: 'KULMAN SIR', bottom: 'LIGHT BALIDINUS NA' },
+        { top: 'MOBILE CHARGE', bottom: '2 PERCENT CHA' }
+    ],
+    prompt: 'A dark room with a single candle burning, a sad Nepali student looking at a laptop with no power, dramatic lighting, 4k realistic',
+  },
+  {
+    id: 'bidesh',
+    label: 'Bidesh Journey',
+    icon: '✈️',
+    texts: [
+        { top: 'NEPAL MA FUTURE', bottom: 'DEKHINA MAILE' },
+        { top: 'AIRPORT KO PHOTO', bottom: 'HALNA MANTHYO' },
+        { top: 'DOLLAR KAMAUNE', bottom: 'SAPANA MATRA BHO' },
+        { top: 'PLUS 2 SAKKYO', bottom: 'AUSTRALIA UDIYO' }
+    ],
+    prompt: 'A young Nepali person at Tribhuvan International Airport pushing a trolley with luggage, looking back emotionally, cinematic lighting',
+  },
+  {
+    id: 'pathao',
+    label: 'Pathao Rider',
+    icon: '🛵',
+    texts: [
+        { top: 'LOCATION KAHA HO', bottom: 'DAI CANCEL GARDINU' },
+        { top: 'DHULO KHADAI', bottom: 'BIKE MA YATRA' },
+        { top: 'INDRIVER SASTO', bottom: 'PATHAO CHADNE HO' },
+        { top: 'CHANGE CHAINA', bottom: 'ESEWA GARNUS' }
+    ],
+    prompt: 'A bike rider wearing a helmet and mask in dusty Kathmandu streets, looking confused at a phone map, funny meme style',
+  },
+  {
+    id: 'bihe',
+    label: 'Nepali Wedding',
+    icon: '💍',
+    texts: [
+        { top: 'MERO BIHE', bottom: 'KAHILE HUNE HO' },
+        { top: 'MASU BHAT KHANA', bottom: 'BIHE MA JANE' },
+        { top: 'DULHA DULAHI', bottom: 'BHANDA MA HANDSOME' },
+        { top: 'JANTI JANE HO', bottom: 'NAACHNA PAIYENA' }
+    ],
+    prompt: 'A traditional Nepali wedding groom and bride sitting, chaotic background with people eating buffet, funny illustration',
+  },
+  {
+    id: 'cricket',
+    label: 'Cricket Craze',
+    icon: '🏏',
+    texts: [
+        { top: 'WORLD CUP', bottom: 'HAMRO NEPAL' },
+        { top: 'PARAS DAI', bottom: 'FARKINU PARYO' },
+        { top: 'CRICKET HERNA', bottom: 'OFFICE CHUTTI' },
+        { top: 'TU GROUND MA', bottom: 'BARISH AAYO' }
+    ],
+    prompt: 'Nepali cricket fans cheering in a stadium with flags, painted faces, intense passion, realistic digital art',
+  },
+  
+  // --- CLASSIC HITS ---
+  {
+    id: 'chiya',
+    label: 'Chiya Guff',
+    icon: '☕',
+    texts: [
+      { top: 'ARU KURA CHOD', bottom: 'CHIYA KHANA JAM' },
+      { top: 'LOVE PARNE UMER MA', bottom: 'CHIYA CHISO BHAYO' },
+      { top: 'PAISA CHAINA', bottom: 'SAATHI LAI CHIYA KHUWA' }
+    ],
+    prompt: 'Two Nepali friends sitting at a local tea shop holding tea glasses, laughing, bokeh background, realistic style',
+  },
+  {
+    id: 'traffic',
+    label: 'KTM Traffic',
+    icon: '🚌',
+    texts: [
+      { top: 'OFFICE TIME MA', bottom: 'KOTESHWOR JAM' },
+      { top: '5 MINUTE MA PUGCHU', bottom: '1 GHANTA LAGYO' },
+      { top: 'BATO BANLA', bottom: 'KAHILE KAHILE' }
+    ],
+    prompt: 'Extremely chaotic traffic jam in Kathmandu, dust, buses, motorbikes, frustrated faces, hyper realistic',
+  },
+  {
+    id: 'momo',
+    label: 'Momo Love',
+    icon: '🥟',
+    texts: [
+      { top: 'MOMO KHANA', bottom: 'JAHILE READY' },
+      { top: 'VEG MOMO RE?', bottom: 'PAAP LAGCHA HAJUR' },
+      { top: 'JHOL MOMO', bottom: 'IS AN EMOTION' }
+    ],
+    prompt: 'A plate of delicious steaming Nepali chicken momos with red chutney, close up food photography',
+  },
+  {
+    id: 'bhat',
+    label: 'Dal Bhat Power',
+    icon: '🍚',
+    texts: [
+      { top: 'PIZZA BURGER HATAU', bottom: 'DAL BHAT LYAU' },
+      { top: '24 HOUR POWER', bottom: 'DAL BHAT POWER' },
+      { top: 'DIETING GARCHU', bottom: 'TARA BHAT THAPDEU' }
+    ],
+    prompt: 'A traditional Nepali brass plate (Thali) with rice, dal, curry, pickle, cinematic lighting',
+  },
+  {
+    id: 'exam',
+    label: 'Exam Tension',
+    icon: '📚',
+    texts: [
+      { top: 'SYLLABUS HERDA', bottom: 'RINGATA LAGYO' },
+      { top: 'PADHNA BASYO', bottom: 'NIDRA LAGYO' },
+      { top: 'PASS MATRA HUNE', bottom: 'MERO LAKSHYA' },
+      { top: 'QUESTION PAPER HERDA', bottom: 'SAB BIRSIYO' }
+    ],
+    prompt: 'A stressed Nepali student with pile of books, holding head in hands, looking confused, funny expression',
+  },
+  {
+    id: 'salary',
+    label: 'Salary Day',
+    icon: '💸',
+    texts: [
+      { top: 'SALARY AAYO', bottom: 'SAKKYO' },
+      { top: 'MONTH END MA', bottom: 'CHAU CHAU JINDAGANI' },
+      { top: 'PAISA HAINA', bottom: 'KHUSHI KAMAUNU PARCHA' }
+    ],
+    prompt: 'A person looking at an empty wallet with a shocked and sad expression, digital art meme style',
+  },
+  {
+    id: 'trek',
+    label: 'Trekking Plan',
+    icon: '🏔️',
+    texts: [
+      { top: 'PLAN BANAYO', bottom: 'CANCEL BHAYO' },
+      { top: 'MUSTANG JANE', bottom: 'PAISA CHAINA' },
+      { top: 'SAATHI HARU', bottom: 'DHOKA DIYO' }
+    ],
+    prompt: 'Group of friends with backpacks in the mountains, but looking disappointed or arguing, funny meme style',
+  },
+];
 
 export const MemeEditor: React.FC<MemeEditorProps> = ({ 
   initialTopText = '', 
@@ -18,11 +212,15 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
   const [bottomText, setBottomText] = useState(initialBottomText);
   
   // Customization State
-  const [topFontSize, setTopFontSize] = useState(10); // Scale factor (1-20)
-  const [bottomFontSize, setBottomFontSize] = useState(10); // Scale factor (1-20)
+  const [topFontSize, setTopFontSize] = useState(10); 
+  const [bottomFontSize, setBottomFontSize] = useState(10); 
   const [textColor, setTextColor] = useState<'white' | 'yellow' | 'black'>('white');
-  const [topOffset, setTopOffset] = useState(5); // % from top
-  const [bottomOffset, setBottomOffset] = useState(5); // % from bottom
+  const [topOffset, setTopOffset] = useState(5); 
+  const [bottomOffset, setBottomOffset] = useState(5); 
+
+  // Loading States
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,22 +230,49 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
     if (initialTopText) setTopText(initialTopText);
     if (initialBottomText) setBottomText(initialBottomText);
     if (initialImage) {
-        const img = new Image();
-        img.onload = () => setImage(img);
-        img.src = initialImage;
+        loadImage(initialImage);
     }
   }, [initialTopText, initialBottomText, initialImage]);
+
+  const loadImage = (src: string) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => setImage(img);
+    img.src = src;
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => setImage(img);
-        img.src = event.target?.result as string;
+        if (event.target?.result) {
+            loadImage(event.target.result as string);
+        }
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleTemplateClick = async (template: typeof NEPALI_TEMPLATES[0]) => {
+    setLoadingTemplateId(template.id);
+    setIsGenerating(true);
+    
+    // Pick a random joke from the available options
+    const textOptions = template.texts;
+    const randomText = textOptions[Math.floor(Math.random() * textOptions.length)];
+
+    try {
+        const generatedImageBase64 = await generateMemeImage(template.prompt);
+        loadImage(generatedImageBase64);
+        setTopText(randomText.top);
+        setBottomText(randomText.bottom);
+    } catch (error) {
+        console.error("Failed to generate template", error);
+        alert("Sorry, could not generate template image. Please try again.");
+    } finally {
+        setIsGenerating(false);
+        setLoadingTemplateId(null);
     }
   };
 
@@ -58,17 +283,14 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
 
   // Text Wrapping Logic
   const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) => {
-    // 1. Split by newlines first to respect user manual breaks
     const paragraphs = text.split('\n');
     let lines: string[] = [];
 
     paragraphs.forEach(paragraph => {
-      // Handle empty lines (user double enter)
       if (!paragraph) {
         lines.push('');
         return;
       }
-
       const words = paragraph.split(' ');
       let currentLine = words[0];
 
@@ -105,12 +327,10 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
     if (image) {
       ctx.drawImage(image, 0, 0, width, height);
     } else {
-      // Dark background for better contrast with default white text
-      ctx.fillStyle = '#1e293b'; // Slate 800
+      ctx.fillStyle = '#1e293b'; 
       ctx.fillRect(0, 0, width, height);
       
-      // Placeholder pattern (X mark)
-      ctx.strokeStyle = '#334155'; // Slate 700
+      ctx.strokeStyle = '#334155';
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(0, 0);
@@ -119,12 +339,11 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
       ctx.lineTo(0, height);
       ctx.stroke();
 
-      // Placeholder Text
-      ctx.fillStyle = '#f1f5f9'; // Slate 100 - High Contrast
+      ctx.fillStyle = '#f1f5f9';
       ctx.font = 'bold 30px "Poppins", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Upload an Image to Start', width / 2, height / 2);
+      ctx.fillText(isGenerating ? 'Generating Template...' : 'Upload Image or Select Template', width / 2, height / 2);
     }
 
     // Common Text Settings
@@ -137,13 +356,12 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
 
     // 2. Draw Top Text
     if (topText) {
-      // Configure specific font size for top
       const topScale = topFontSize / 10;
       const topFinalSize = Math.floor(baseSize * topScale);
       const topLineHeight = topFinalSize * 1.2;
 
       ctx.font = `900 ${topFinalSize}px "Impact", "Arial Black", sans-serif`;
-      ctx.lineWidth = topFinalSize / 15;
+      ctx.lineWidth = topFinalSize / 8; // Thicker stroke for better readability
       ctx.textBaseline = 'top';
       
       const x = width / 2;
@@ -159,13 +377,12 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
 
     // 3. Draw Bottom Text
     if (bottomText) {
-      // Configure specific font size for bottom
       const bottomScale = bottomFontSize / 10;
       const bottomFinalSize = Math.floor(baseSize * bottomScale);
       const bottomLineHeight = bottomFinalSize * 1.2;
 
       ctx.font = `900 ${bottomFinalSize}px "Impact", "Arial Black", sans-serif`;
-      ctx.lineWidth = bottomFinalSize / 15;
+      ctx.lineWidth = bottomFinalSize / 8; // Thicker stroke
       ctx.textBaseline = 'bottom';
       
       const x = width / 2;
@@ -174,15 +391,13 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
       const lines = wrapText(ctx, bottomText.toUpperCase(), maxWidth);
       
       lines.forEach((line, i) => {
-        // Draw from bottom upwards so the last line ends at the offset
         const lineY = y - ((lines.length - 1 - i) * bottomLineHeight);
-        
         ctx.strokeText(line, x, lineY);
         ctx.fillText(line, x, lineY);
       });
     }
 
-  }, [image, topText, bottomText, topFontSize, bottomFontSize, textColor, topOffset, bottomOffset]);
+  }, [image, topText, bottomText, topFontSize, bottomFontSize, textColor, topOffset, bottomOffset, isGenerating]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -204,9 +419,10 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
              ref={canvasRef} 
              className="max-w-full max-h-[600px] object-contain shadow-sm"
            />
-           {!image && (
-             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0">
-               {/* Hidden icon since canvas draws the placeholder */}
+           {isGenerating && (
+             <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white backdrop-blur-sm">
+                <Loader2 className="w-10 h-10 animate-spin mb-2 text-[#DC143C]" />
+                <p className="font-bold">Designing Template...</p>
              </div>
            )}
         </div>
@@ -229,6 +445,7 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 variant="outline"
                 className="py-1 px-3 text-sm"
+                disabled={isGenerating}
               >
                 <Upload size={16} /> Upload
               </Button>
@@ -240,6 +457,30 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
                   <Trash2 size={18} />
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* New Templates Section */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                <Sparkles size={14} className="text-[#DC143C]"/> Quick Nepali Templates
+            </label>
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                {NEPALI_TEMPLATES.map((tpl) => (
+                    <button
+                        key={tpl.id}
+                        onClick={() => handleTemplateClick(tpl)}
+                        disabled={isGenerating}
+                        className={`flex-shrink-0 flex flex-col items-center justify-center p-3 rounded-lg border min-w-[100px] transition-all ${loadingTemplateId === tpl.id ? 'bg-blue-50 border-blue-400' : 'bg-gray-50 border-gray-200 hover:border-[#DC143C] hover:bg-white hover:shadow-md'}`}
+                    >
+                        {loadingTemplateId === tpl.id ? (
+                            <Loader2 className="w-6 h-6 animate-spin text-blue-600 mb-1" />
+                        ) : (
+                            <span className="text-2xl mb-1">{tpl.icon}</span>
+                        )}
+                        <span className="text-xs font-semibold text-gray-700">{tpl.label}</span>
+                    </button>
+                ))}
             </div>
           </div>
 
@@ -360,7 +601,7 @@ export const MemeEditor: React.FC<MemeEditorProps> = ({
             </Button>
             {!image && (
                <p className="text-xs text-center text-red-500 mt-2">
-                 Please upload an image first to download.
+                 Please upload an image or select a template above.
                </p>
             )}
           </div>
